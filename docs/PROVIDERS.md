@@ -414,6 +414,8 @@ choose them with `preferred_provider: "minimax"`.
 
 **Optional:** `MAX_STUDIO_BASE_URL`, `MAX_STUDIO_PROJECT_ID`
 
+**Skill:** `.agents/skills/max-studio-v3/SKILL.md`
+
 Max Studio V3 exposes asynchronous task endpoints for `Omni_Flash` and four
 Veo 3.1 variants. OpenMontage supports text-to-video, image-to-video,
 multi-reference video, first/last-frame interpolation, video extension, and
@@ -439,6 +441,12 @@ Security notes:
 - Max Studio reports `amount` and `balance` in provider credits but the supplied
   V3 contract has no USD conversion. OpenMontage records the credits and does
   not invent a dollar estimate.
+
+Reference-image note:
+
+- `Omni_Flash` 10s `reference-images-to-video` was verified on 2026-08-18 with
+  uploaded local images, `model: ["Omni_Flash"]`, `ratio: "LANDSCAPE"`, and no
+  default `audio` field. The successful output was 1280x720, 24fps, 10.005s.
 
 ---
 

@@ -69,7 +69,7 @@ class MaxStudioVideo(BaseTool):
 
     dependencies = ["env:MAX_STUDIO_API_KEY", "env:MAX_STUDIO_COOKIE"]
     install_instructions = max_studio_client.INSTALL_INSTRUCTIONS
-    agent_skills = ["ai-video-gen", "gemini-omni"]
+    agent_skills = ["max-studio-v3", "ai-video-gen", "gemini-omni"]
 
     capabilities = list(OPERATIONS)
     supports = {
@@ -276,9 +276,13 @@ class MaxStudioVideo(BaseTool):
         inputs: dict[str, Any],
     ) -> str:
         image_value = self._remote_or_data(value, "image")
+        payload = {"imageUrl": image_value}
+        upload_ratio = inputs.get("upload_image_ratio")
+        if upload_ratio:
+            payload["ratio"] = str(upload_ratio)
         _, completed = self._run_task(
             "upload-image",
-            {"imageUrl": image_value, "ratio": inputs.get("aspect_ratio", "16:9")},
+            payload,
             api_key=api_key,
             cookie=cookie,
             inputs=inputs,
@@ -401,7 +405,8 @@ class MaxStudioVideo(BaseTool):
                 )
                 for value in references
             ]
-            payload["audio"] = bool(inputs.get("generate_audio", True))
+            if "generate_audio" in inputs:
+                payload["audio"] = bool(inputs.get("generate_audio"))
         elif operation == "first_last_frame_to_video":
             first = self._pick(inputs, "first_frame_url", "first_frame_path")
             last = self._pick(inputs, "last_frame_url", "last_frame_path")
