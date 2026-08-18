@@ -357,7 +357,11 @@ class MaxStudioVideo(BaseTool):
         else:
             payload = {
                 "prompt": prompt,
-                "model": model,
+                # V3 accepts a single model as either a string or array in the
+                # field table, but the video endpoint examples consistently use
+                # arrays and image/reference video routes reject some scalar
+                # payloads as INVALID_PARAMS.
+                "model": [model],
                 "ratio": ratio,
                 "length": duration,
             }

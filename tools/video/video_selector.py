@@ -338,11 +338,17 @@ class VideoSelector(BaseTool):
             if "query" in required and "query" not in adapted:
                 adapted["query"] = adapted.get("prompt", "")
 
-        # Auto-resolve reference_image_path to a URL for providers that need it
+        # Auto-resolve reference_image_path to a URL for providers that need it.
+        # Some providers (for example Max Studio) expose image_url as an alias
+        # but can also accept/upload local paths themselves.  Do not force those
+        # providers through fal.ai's uploader.
         if adapted.get("operation") == "image_to_video" and adapted.get("reference_image_path"):
             tool_props = getattr(tool, "input_schema", {}).get("properties", {})
             # If the provider uses image_url (not reference_image_path), upload and convert
-            if "image_url" in tool_props and "image_url" not in adapted:
+            accepts_local_reference = any(
+                key in tool_props for key in ("reference_image_path", "image_path")
+            )
+            if "image_url" in tool_props and "image_url" not in adapted and not accepts_local_reference:
                 try:
                     from tools.video._shared import upload_image_fal
                     adapted["image_url"] = upload_image_fal(adapted["reference_image_path"])
