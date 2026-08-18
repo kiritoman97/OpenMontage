@@ -24,6 +24,7 @@ What Library of Congress is good for
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,12 @@ _log = logging.getLogger(__name__)
 _SEARCH_URL = "https://www.loc.gov/search/"
 _LICENSE_PD = "Public domain (Library of Congress)"
 _LICENSE_CHECK = "Rights status varies — verify per item (Library of Congress)"
+
+# loc.gov is routinely slow (10-60s) and occasionally drops the connection
+# mid-body. A 30s single-shot request fails often enough to look like an
+# outage, so search retries with a generous timeout.
+_TIMEOUT = 90
+_RETRIES = 3
 
 # Video-related format filters for the LoC API
 _VIDEO_FORMATS = ["film/video", "motion picture"]
@@ -69,21 +76,39 @@ class LibraryOfCongressSource:
 
         # Filter by format
         if kind == "video":
-            params["fa"] = "original-format:film/video"
+            # The loc.gov facet value is literally "film, video" (comma),
+            # not "film/video" -- the old value matched nothing.
+            params["fa"] = "original-format:film, video"
         elif kind == "image":
             params["fa"] = "original-format:photo, print, drawing"
 
-        try:
-            r = requests.get(
-                _SEARCH_URL,
-                params=params,
-                timeout=30,
-                headers={"Accept": "application/json"},
-            )
-            r.raise_for_status()
-            data = r.json()
-        except Exception as e:
-            _log.warning("Library of Congress search failed: %s", e)
+        headers = {
+            "Accept": "application/json",
+            # loc.gov throttles/blocks requests without a real UA.
+            "User-Agent": "OpenMontage/1.0 (stock source adapter)",
+        }
+
+        data = None
+        last_error: Exception | None = None
+        for attempt in range(1, _RETRIES + 1):
+            try:
+                r = requests.get(
+                    _SEARCH_URL, params=params, timeout=_TIMEOUT, headers=headers
+                )
+                r.raise_for_status()
+                data = r.json()
+                break
+            except Exception as e:  # timeout, incomplete read, 5xx, bad JSON
+                last_error = e
+                _log.warning(
+                    "Library of Congress search attempt %d/%d failed: %s",
+                    attempt, _RETRIES, e,
+                )
+                if attempt < _RETRIES:
+                    time.sleep(2 * attempt)
+
+        if data is None:
+            _log.warning("Library of Congress search failed: %s", last_error)
             return []
 
         results = data.get("results", []) or []
@@ -142,14 +167,28 @@ class LibraryOfCongressSource:
         for res in resources:
             if not isinstance(res, dict):
                 continue
-            files = res.get("files", []) or []
+
+            # Search-result shape: resources[] carry direct media keys and
+            # `files` is an ITEM COUNT (int), not a list. Item-detail shape:
+            # `files` is a list of lists of file dicts. Handle both -- the
+            # old code assumed only the latter and crashed with
+            # "TypeError: 'int' object is not iterable" on every search.
+            direct = self._candidate_from_resource(
+                res, kind, filters, source_url, source_tags, lic, image_url
+            )
+            if direct is not None:
+                out.append(direct)
+                continue
+
+            files = res.get("files")
+            if not isinstance(files, list):
+                continue
             for file_group in files:
-                if not isinstance(file_group, list):
-                    continue
-                for f in file_group:
+                group = file_group if isinstance(file_group, list) else [file_group]
+                for f in group:
                     if not isinstance(f, dict):
                         continue
-                    url = f.get("url", "") or ""
+                    url = f.get("url", "") or f.get("download", "") or ""
                     mime = (f.get("mimetype", "") or "").lower()
                     if not url:
                         continue
@@ -172,6 +211,13 @@ class LibraryOfCongressSource:
 
                     full_url = url if url.startswith("http") else f"https://www.loc.gov{url}"
 
+                    duration = float(res.get("duration") or 0)
+                    if is_video and duration:
+                        if filters.min_duration and duration < filters.min_duration:
+                            continue
+                        if filters.max_duration and duration > filters.max_duration:
+                            continue
+
                     out.append(
                         Candidate(
                             source=self.name,
@@ -179,13 +225,13 @@ class LibraryOfCongressSource:
                             source_url=source_url,
                             download_url=full_url,
                             kind="video" if is_video else "image",
-                            width=int(f.get("width") or 0),
-                            height=int(f.get("height") or 0),
-                            duration=0.0,  # LoC doesn't expose duration in search
+                            width=int(f.get("width") or res.get("width") or 0),
+                            height=int(f.get("height") or res.get("height") or 0),
+                            duration=duration,
                             creator="Library of Congress",
                             license=lic,
                             source_tags=source_tags,
-                            thumbnail_url=image_url,
+                            thumbnail_url=self._abs(res.get("poster")) or image_url,
                             extra={
                                 "item_id": item_id,
                                 "mime": mime,
@@ -231,3 +277,81 @@ class LibraryOfCongressSource:
                     if chunk:
                         f.write(chunk)
         return out_path
+
+    @staticmethod
+    def _abs(url: Any) -> str:
+        """Absolutise a loc.gov URL. Media URLs often come back protocol-relative."""
+        if not isinstance(url, str) or not url:
+            return ""
+        if url.startswith("//"):
+            return "https:" + url
+        if url.startswith("http"):
+            return url
+        return f"https://www.loc.gov{url}"
+
+    def _candidate_from_resource(
+        self,
+        res: dict,
+        kind: str,
+        filters: SearchFilters,
+        source_url: str,
+        source_tags: str,
+        lic: str,
+        fallback_thumb: str,
+    ) -> Candidate | None:
+        """Build a candidate from a search-result `resources[]` entry.
+
+        Search results expose the playable file directly on the resource
+        (`video` / `audio` / `image` keys) rather than in a nested
+        `files` list. Returns None when this resource has no usable direct
+        media for the requested kind.
+        """
+        video_url = self._abs(res.get("video"))
+        image_direct = self._abs(res.get("image"))
+
+        if kind == "video":
+            if not video_url:
+                return None
+            media_url, candidate_kind = video_url, "video"
+        elif kind == "image":
+            if not image_direct:
+                return None
+            media_url, candidate_kind = image_direct, "image"
+        else:
+            if video_url:
+                media_url, candidate_kind = video_url, "video"
+            elif image_direct:
+                media_url, candidate_kind = image_direct, "image"
+            else:
+                return None
+
+        duration = float(res.get("duration") or 0)
+        if candidate_kind == "video" and duration:
+            if filters.min_duration and duration < filters.min_duration:
+                return None
+            if filters.max_duration and duration > filters.max_duration:
+                return None
+
+        width = int(res.get("width") or 0)
+        if candidate_kind == "video" and filters.min_width and width and width < filters.min_width:
+            return None
+
+        return Candidate(
+            source=self.name,
+            source_id=f"loc_{hash(media_url) & 0xFFFFFFFF:08x}",
+            source_url=source_url,
+            download_url=media_url,
+            kind=candidate_kind,
+            width=width,
+            height=int(res.get("height") or 0),
+            duration=duration,
+            creator="Library of Congress",
+            license=lic,
+            source_tags=source_tags,
+            thumbnail_url=self._abs(res.get("poster")) or fallback_thumb,
+            extra={
+                "media_object_id": res.get("media_object_id"),
+                "resource_url": res.get("url"),
+                "video_stream": res.get("video_stream"),
+            },
+        )

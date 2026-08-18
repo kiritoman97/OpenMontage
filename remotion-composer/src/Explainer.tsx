@@ -806,17 +806,32 @@ export const Explainer: React.FC<ExplainerProps> = (props) => {
       {/* Layer 0: Animated gradient background — driven by theme */}
       <AnimatedBackground theme={theme} />
 
-      {/* Layer 1: Visual scenes */}
-      {cuts.map((cut) => {
-        const from = Math.round(cut.in_seconds * fps);
-        const duration = Math.round((cut.out_seconds - cut.in_seconds) * fps);
+      {/* Layer 1: Visual scenes with 90s Vintage Film Color Grading */}
+      <AbsoluteFill
+        style={{
+          filter: "sepia(0.3) contrast(1.15) saturate(0.9) brightness(0.92) hue-rotate(-8deg)",
+        }}
+      >
+        {cuts.map((cut) => {
+          const from = Math.round(cut.in_seconds * fps);
+          const duration = Math.round((cut.out_seconds - cut.in_seconds) * fps);
 
-        return (
-          <Sequence key={cut.id} from={from} durationInFrames={duration}>
-            <SceneRenderer cut={cut} theme={theme} />
-          </Sequence>
-        );
-      })}
+          return (
+            <Sequence key={cut.id} from={from} durationInFrames={duration}>
+              <SceneRenderer cut={cut} theme={theme} />
+            </Sequence>
+          );
+        })}
+      </AbsoluteFill>
+
+      {/* 90s Film Grain & Warm Tint Overlay */}
+      <AbsoluteFill
+        style={{
+          pointerEvents: "none",
+          mixBlendMode: "overlay",
+          background: "radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%)",
+        }}
+      />
 
       {/* Layer 2: Overlays (section titles, stat reveals, hero titles) */}
       {overlays?.map((overlay, i) => {

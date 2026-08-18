@@ -13,6 +13,8 @@ export type EndTagProps = {
   fadeInSeconds?: number;
   holdSeconds?: number;
   fadeOutSeconds?: number;
+  fontSize?: number;
+  overlayScrimOpacity?: number;
   // Overlay mode: render on a transparent background so the tag can be
   // composited on top of the body footage in post, instead of being
   // concatenated as a standalone black card. When `overlay=true` the
@@ -55,6 +57,8 @@ export const EndTag: React.FC<EndTagProps> = ({
   fadeInSeconds = 0.6,
   holdSeconds = 4.3,
   fadeOutSeconds = 0.6,
+  fontSize = 84,
+  overlayScrimOpacity = 0,
   overlay = false,
 }) => {
   const frame = useCurrentFrame();
@@ -120,7 +124,9 @@ export const EndTag: React.FC<EndTagProps> = ({
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: overlay ? "transparent" : pal.background,
+        backgroundColor: overlay
+          ? `rgba(0, 0, 0, ${overlayScrimOpacity})`
+          : pal.background,
         justifyContent: "center",
         alignItems: "center",
       }}
@@ -140,7 +146,7 @@ export const EndTag: React.FC<EndTagProps> = ({
             fontFamily:
               "'Space Grotesk', 'Inter', 'Helvetica Neue', system-ui, sans-serif",
             fontWeight: 900,
-            fontSize: 84,
+            fontSize,
             letterSpacing: "0.12em",
             lineHeight: 1.18,
             color: pal.text,

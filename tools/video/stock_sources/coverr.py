@@ -61,6 +61,9 @@ class CoverrSource:
             "query": query,
             "page_size": max(1, min(filters.per_page, 25)),
             "page": max(1, filters.page),
+            # REQUIRED: without urls=true the API omits the `urls` block
+            # entirely, so every hit has no download_url and is dropped.
+            "urls": "true",
         }
 
         r = requests.get(
@@ -85,6 +88,7 @@ class CoverrSource:
             urls = v.get("urls", {}) or {}
             download_url = (
                 urls.get("mp4_download")
+                or urls.get("mp4")
                 or urls.get("mp4_1080")
                 or urls.get("mp4_720")
                 or urls.get("mp4_preview")
@@ -93,8 +97,8 @@ class CoverrSource:
             if not download_url:
                 continue
 
-            width = int(v.get("width") or 1920)
-            height = int(v.get("height") or 1080)
+            width = int(v.get("max_width") or v.get("width") or 1920)
+            height = int(v.get("max_height") or v.get("height") or 1080)
             if filters.min_width and width < filters.min_width:
                 continue
 
@@ -102,7 +106,8 @@ class CoverrSource:
             if isinstance(tags, list):
                 tags = " ".join(tags)
             title = v.get("title", "") or ""
-            source_tags = f"{title} {tags}".strip()
+            description = v.get("description", "") or ""
+            source_tags = f"{title} {description} {tags}".strip()
 
             out.append(
                 Candidate(
@@ -117,10 +122,18 @@ class CoverrSource:
                     creator=v.get("creator", {}).get("name", "") if isinstance(v.get("creator"), dict) else "",
                     license=_LICENSE,
                     source_tags=source_tags,
-                    thumbnail_url=urls.get("poster") or urls.get("thumbnail") or "",
+                    thumbnail_url=(
+                        v.get("poster")
+                        or v.get("thumbnail")
+                        or urls.get("poster")
+                        or urls.get("thumbnail")
+                        or ""
+                    ),
                     extra={
                         "slug": v.get("slug"),
-                        "category": v.get("category"),
+                        "category": v.get("category") or v.get("scene"),
+                        "fps": v.get("fps"),
+                        "is_ai_generated": v.get("is_ai_generated"),
                     },
                 )
             )

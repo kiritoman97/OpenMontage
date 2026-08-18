@@ -239,6 +239,7 @@ This repo is built for agentic operation. If you're an OpenClaw-style agent, her
 # Image + video gateway:
 FAL_KEY=your-key               # FLUX images + Google Veo, Kling, MiniMax video + Recraft images
 ATLASCLOUD_API_KEY=your-key    # Atlas Cloud — Seedream/Nano Banana/GPT Image + Kling/Seedance/Hailuo video
+MAX_STUDIO_API_KEY=your-key    # Max Studio V3 — Omni Flash + Veo 3.1 (also requires MAX_STUDIO_COOKIE)
 
 # Kling official direct API:
 KLING_API_KEY=your-key         # Official Kling video, image, TTS, avatar, lip sync
@@ -498,6 +499,7 @@ Each tool declares which Layer 3 skills it relies on. The agent reads Layer 1 to
 | **Kling (fal.ai)** | Cloud API | High quality, fast via fal.ai gateway |
 | **Kling Official** | Cloud API | Official direct API with separate `kling_official` provider |
 | **Atlas Cloud** | Cloud API | Unified gateway for Seedance, MiniMax, Hunyuan, and other multimodal models |
+| **Max Studio V3** | Cloud API | Omni Flash and Veo 3.1 text, image, reference, first/last-frame, extend, and edit workflows |
 | **Seedance 2.0 (Volcengine Ark)** | Cloud API | Official direct API with separate `seedance_ark` provider |
 | **Seedance 2.5 / 2.0** | Cloud API | Text, image, and reference-driven video workflows through supported gateways |
 | **Gemini Omni Flash** | Cloud API | Conversational multimodal video generation and editing |

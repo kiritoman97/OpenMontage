@@ -55,6 +55,8 @@ AZURE_SPEECH_REGION=         # Speech resource region, e.g. eastus
 FAL_KEY=                     # FLUX, Recraft, Kling, Veo, MiniMax video
 MINIMAX_API_KEY=             # MiniMax first-party image + MiniMax H3 video generation
 ATLASCLOUD_API_KEY=          # Atlas Cloud image/video gateway
+MAX_STUDIO_API_KEY=          # Max Studio V3 video gateway (requires MAX_STUDIO_COOKIE)
+MAX_STUDIO_COOKIE=           # Private Google Labs session cookie; never commit or log
 
 # KLING OFFICIAL DIRECT API
 KLING_API_KEY=               # Official Kling video, image, TTS, avatar, lip sync
@@ -401,6 +403,42 @@ estimates and generation results.
 
 The tools are automatically discoverable through the image and video selectors;
 choose them with `preferred_provider: "minimax"`.
+
+---
+
+### Max Studio V3 — Omni Flash and Veo 3.1 Gateway
+
+**Tool:** `max_studio_video`
+
+**Env vars:** `MAX_STUDIO_API_KEY`, `MAX_STUDIO_COOKIE`
+
+**Optional:** `MAX_STUDIO_BASE_URL`, `MAX_STUDIO_PROJECT_ID`
+
+Max Studio V3 exposes asynchronous task endpoints for `Omni_Flash` and four
+Veo 3.1 variants. OpenMontage supports text-to-video, image-to-video,
+multi-reference video, first/last-frame interpolation, video extension, and
+video editing. The provider uploads local image/video inputs first, preserves
+the returned `taskid`, polls every four seconds, and downloads the final
+`fifeUrl` into the project workspace.
+
+| Model | Text | Image | References | First/last | Extend/edit |
+|---|---:|---:|---:|---:|---:|
+| `Omni_Flash` | Yes | Yes | Yes | Yes | Yes |
+| `Veo_3.1-Lite` | Yes | Yes | Yes | Yes | Yes |
+| `Veo_3.1-Lite_Lower_Priority` | Yes | Yes | Yes | Yes | Yes |
+| `Veo_3.1-Fast` | Yes | Yes | Yes | Yes | Yes |
+| `Veo_3.1-Quality` | Yes | Yes | No | Yes | Yes |
+
+Security notes:
+
+- The cookie is a live Google Labs login session. Keep it in a private secret
+  store or process environment, rotate it after exposure, and never commit it.
+- Neither credential is included in tool inputs, artifacts, checkpoints, or
+  error messages. Ambiguous task-submission failures are not retried because a
+  billable task may already exist.
+- Max Studio reports `amount` and `balance` in provider credits but the supplied
+  V3 contract has no USD conversion. OpenMontage records the credits and does
+  not invent a dollar estimate.
 
 ---
 

@@ -94,6 +94,10 @@ class VideoCompose(BaseTool):
             },
             "input_path": {"type": "string"},
             "output_path": {"type": "string"},
+            "public_dir": {
+                "type": "string",
+                "description": "Optional small Remotion public directory containing only this project's staged render assets.",
+            },
             "edit_decisions": {
                 "type": "object",
                 "description": "Full edit_decisions artifact (required for compose/render)",
@@ -991,10 +995,14 @@ class VideoCompose(BaseTool):
         if bespoke.get("concurrency"):
             cmd.append(f"--concurrency={bespoke['concurrency']}")
 
+        remotion_timeout_ms = int(inputs.get("remotion_timeout_ms") or 1_800_000)
+        cmd.append(f"--timeout={remotion_timeout_ms}")
+        subprocess_timeout = max(1_800, int(remotion_timeout_ms / 1000) + 120)
+
         try:
             # Run from inside the composer dir so npx resolves the local
             # remotion binary (mirrors _remotion_render).
-            self.run_command(cmd, timeout=1800, cwd=composer_dir)
+            self.run_command(cmd, timeout=subprocess_timeout, cwd=composer_dir)
         except Exception as e:
             return ToolResult(success=False, error=f"Atelier (bespoke) Remotion render failed: {e}")
 
@@ -2000,6 +2008,16 @@ class VideoCompose(BaseTool):
                 cmd.extend(["--width", str(p.width), "--height", str(p.height)])
             except (ImportError, ValueError):
                 pass
+
+        public_dir = inputs.get("public_dir")
+        if public_dir:
+            public_path = Path(public_dir).resolve()
+            if not public_path.exists():
+                return ToolResult(
+                    success=False,
+                    error=f"Remotion public_dir not found: {public_path}",
+                )
+            cmd.append(f"--public-dir={public_path}")
 
         # Optional creator-facing render timeout. Remotion's `--timeout` (ms)
         # governs headless-browser setup and delayRender(); on slow machines or
